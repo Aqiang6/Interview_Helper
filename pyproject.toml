@@ -1,0 +1,33 @@
+[project]
+name = "ai-agent-interviewer"
+version = "0.1.0"
+description = "AI Agent Interviewer - 上下文缓存引擎 + 可视化API管理控制台"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "numpy>=1.24.0",
+    "sentence-transformers>=2.2.0",
+    "cryptography>=41.0.0",
+    "httpx>=0.25.0",
+    "tiktoken>=0.5.0",
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.41b0",
+    "streamlit>=1.30.0",
+    "sse-starlette>=1.8.0",
+    "python-dotenv>=1.0.0",
+    "PyPDF2>=3.0.0",
+    "pdfplumber>=0.11.0",
+    "PyMuPDF>=1.24.0",
+    "pytesseract>=0.3.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+]

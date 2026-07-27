@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 模拟面试</title>
+    <!-- Vue3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- ElementPlus -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <script src="https://unpkg.com/element-plus"></script>
+    <!-- ElementPlus Icons -->
+    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+    <style>
+        :root {
+            --color-primary: #4F46E5;
+            --color-primary-light: #EEF2FF;
+            --color-primary-dark: #3730A3;
+            --color-secondary: #06B6D4;
+            --color-success: #10B981;
+            --color-warning: #F59E0B;
+            --color-danger: #EF4444;
+            --color-bg: #F8FAFC;
+            --color-bg-gradient-start: #EEF2FF;
+            --color-bg-gradient-end: #F0FDFA;
+            --color-surface: rgba(255, 255, 255, 0.85);
+            --color-surface-hover: rgba(255, 255, 255, 0.95);
+            --color-text-primary: #1E293B;
+            --color-text-secondary: #64748B;
+            --color-text-muted: #94A3B8;
+            --color-border: rgba(226, 232, 240, 0.6);
+            --color-border-light: rgba(241, 245, 249, 0.8);
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+            --shadow-glass: 0 8px 32px rgba(79, 70, 229, 0.08);
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 12px;
+            --space-lg: 16px;
+            --space-xl: 20px;
+            --space-2xl: 28px;
+            --space-3xl: 36px;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --radius-full: 9999px;
+            --font-size-xs: 12px;
+            --font-size-sm: 14px;
+            --font-size-base: 15px;
+            --font-size-lg: 16px;
+            --font-size-xl: 20px;
+            --font-size-2xl: 24px;
+            --font-size-3xl: 28px;
+            --font-weight-normal: 400;
+            --font-weight-medium: 500;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, var(--color-bg-gradient-start) 0%, var(--color-bg-gradient-end) 50%, var(--color-bg) 100%);
+            height: 100vh;
+            overflow: hidden;
+            color: var(--color-text-primary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        #app { height: 100%; }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--space-lg) var(--space-xl);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        @media (max-width: 1200px) {
+            .main-container { max-width: 1000px; padding: var(--space-xl) var(--space-lg); }
+        }
+
+        @media (max-width: 768px) {
+            .main-container { padding: var(--space-lg) var(--space-md); }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: var(--space-xl);
+            flex-shrink: 0;
+        }
+
+        .header-icon {
+            font-size: 36px;
+            margin-bottom: var(--space-sm);
+            filter: drop-shadow(0 4px 12px rgba(79, 70, 229, 0.15));
+        }
+
+        .header h1 {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-xs);
+            background: linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+            max-width: 400px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+
+        .step-nav-compact {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: var(--space-lg);
+            flex-shrink: 0;
+        }
+
+        .step-dot {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--color-border);
+            color: var(--color-text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .step-dot.active {
+            background: var(--color-primary);
+            color: white;
+            cursor: default;
+        }
+
+        .step-line {
+            width: 24px;
+            height: 2px;
+            background: var(--color-border);
+        }
+
+        .card {
+            background: var(--color-surface);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-glass);
+            padding: var(--space-lg);
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 步骤3的card特殊处理 */
+        .card.interview-step {
+            overflow: visible;
+        }
+
+        .card.interview-step .step-title {
+            flex-shrink: 0;
+        }
+
+        .card.interview-step .chat-container {
+            flex: 1;
+            min-height: 200px;
+            max-height: none;
+        }
+
+        .card.interview-step .chat-input,
+        .card.interview-step .action-bar {
+            flex-shrink: 0;
+        }
+
+        .card::-webkit-scrollbar {
+            display: none;
+        }
+
+        .card:hover {
+            background: var(--color-surface-hover);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .step-title {
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-md);
+            color: var(--color-text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .step-title::before {
+            content: '';
+            width: 4px;
+            height: 28px;
+            background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            border-radius: var(--radius-full);
+        }
+
+        .api-presets {
+            display: flex;
+            gap: var(--space-md);
+            flex-wrap: wrap;
+            margin-bottom: var(--space-xl);
+        }
+
+        .api-presets .el-button {
+            margin: 0;
+            padding: var(--space-sm) var(--space-xl);
+            border-radius: var(--radius-lg);
+            font-weight: var(--font-weight-medium);
+            transition: all 0.2s ease;
+        }
+
+        .api-presets .el-button:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .skill-tag {
+            margin: var(--space-xs) var(--space-sm) var(--space-xs) 0;
+        }
+
+        .chat-container {
+            background: rgba(248, 250, 252, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--color-border-light);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            min-height: 300px;
+            max-height: calc(100vh - 280px);
+            overflow-y: auto;
+            margin-bottom: var(--space-lg);
+            scrollbar-width: thin;
+            scrollbar-color: var(--color-primary-light) transparent;
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .chat-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background: var(--color-primary-light);
+            border-radius: var(--radius-full);
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: var(--space-lg);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .message-avatar.interviewer {
+            background: linear-gradient(135deg, var(--color-primary-light) 0%, #E0E7FF 100%);
+            color: var(--color-primary);
+            border: 2px solid rgba(79, 70, 229, 0.1);
+        }
+
+        .message-avatar.candidate {
+            background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+            color: var(--color-success);
+            border: 2px solid rgba(16, 185, 129, 0.1);
+            margin-left: auto;
+            order: 2;
+        }
+
+        .message-body {
+            max-width: 75%;
+            padding: var(--space-sm) var(--space-lg);
+            border-radius: var(--radius-lg);
+            margin: 0 var(--space-sm);
+            line-height: 1.6;
+            font-size: var(--font-size-sm);
+            white-space: pre-wrap;
+        }
+
+        .message-body.interviewer {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            box-shadow: var(--shadow-md);
+            color: var(--color-text-primary);
+        }
+
+        .message-body.candidate {
+            background: linear-gradient(135deg, var(--color-primary-light) 0%, rgba(79, 70, 229, 0.1) 100%);
+            color: var(--color-primary-dark);
+            margin-left: auto;
+            order: 1;
+            border: 1px solid rgba(79, 70, 229, 0.15);
+        }
+
+        .chat-input {
+            display: flex;
+            gap: var(--space-md);
+        }
+
+        .chat-input .el-input {
+            flex: 1;
+        }
+
+        .chat-input .el-input__wrapper {
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border-color: var(--color-border);
+        }
+
+        .chat-input .el-button {
+            padding: 0 var(--space-2xl);
+            border-radius: var(--radius-lg);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .footer {
+            text-align: center;
+            color: var(--color-text-muted);
+            padding: var(--space-lg) 0;
+            font-size: var(--font-size-xs);
+            flex-shrink: 0;
+        }
+
+        .report-card {
+            background: var(--color-surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-lg);
+            box-shadow: var(--shadow-md);
+        }
+
+        .report-card-title {
+            font-size: var(--font-size-base);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-text-primary);
+            margin-bottom: var(--space-lg);
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--color-border-light);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .score-circle {
+            text-align: center;
+            padding: var(--space-lg) 0;
+            position: relative;
+        }
+
+        .score-circle::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, rgba(79, 70, 229, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .score-number {
+            font-size: 56px;
+            font-weight: var(--font-weight-bold);
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+            z-index: 1;
+            line-height: 1;
+        }
+
+        .score-label {
+            color: var(--color-text-secondary);
+            font-size: var(--font-size-sm);
+            margin-top: var(--space-xs);
+            display: block;
+        }
+
+        .dimension-bar {
+            margin: var(--space-lg) 0;
+        }
+
+        .dimension-bar .el-progress {
+            margin: 0 var(--space-lg);
+        }
+
+        .dimension-bar .el-progress-bar__outer {
+            border-radius: var(--radius-full);
+            background: rgba(79, 70, 229, 0.08);
+        }
+
+        .dimension-bar .el-progress-bar__inner {
+            border-radius: var(--radius-full);
+        }
+
+        .recommendation-tag {
+            display: inline-block;
+            padding: var(--space-sm) var(--space-2xl);
+            border-radius: var(--radius-full);
+            color: #fff;
+            font-weight: var(--font-weight-semibold);
+            font-size: var(--font-size-base);
+            box-shadow: var(--shadow-md);
+            transition: transform 0.2s ease;
+        }
+
+        .recommendation-tag:hover {
+            transform: scale(1.05);
+        }
+
+        .recommendation-pass {
+            background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+        }
+
+        .recommendation-fail {
+            background: linear-gradient(135deg, var(--color-danger) 0%, #DC2626 100%);
+        }
+
+        .recommendation-pending {
+            background: linear-gradient(135deg, var(--color-warning) 0%, #D97706 100%);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: var(--space-lg);
+            margin: var(--space-xl) 0;
+        }
+
+        .info-item {
+            background: rgba(248, 250, 252, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--color-border-light);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+        }
+
+        .info-label {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: var(--space-xs);
+            font-weight: var(--font-weight-medium);
+        }
+
+        .info-value {
+            font-size: var(--font-size-base);
+            color: var(--color-text-primary);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .list-card {
+            background: rgba(248, 250, 252, 0.8);
+            border: 1px solid var(--color-border-light);
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            margin: var(--space-sm) 0;
+        }
+
+        .list-card ul {
+            margin: 0;
+            padding-left: var(--space-lg);
+        }
+
+        .list-card li {
+            margin: var(--space-sm) 0;
+            color: var(--color-text-primary);
+            line-height: 1.5;
+            font-size: var(--font-size-sm);
+        }
+
+        .list-card li::marker {
+            color: var(--color-primary);
+            font-weight: bold;
+        }
+
+        .step-nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: var(--space-lg);
+            padding: var(--space-sm) var(--space-lg);
+            background: var(--color-surface);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-glass);
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .step-nav::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 8%;
+            right: 8%;
+            height: 2px;
+            background: var(--color-border-light);
+            transform: translateY(-50%);
+            z-index: 0;
+        }
+
+        .step-nav::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 8%;
+            right: calc(100% - 8% - (84% * var(--progress, 0)));
+            height: 2px;
+            background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            transform: translateY(-50%);
+            z-index: 1;
+            border-radius: var(--radius-full);
+            transition: right 0.5s ease;
+        }
+
+        .step-nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+            flex: 1;
+            max-width: 120px;
+        }
+
+        .step-nav-item .dot {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-full);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-semibold);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            margin-bottom: var(--space-xs);
+        }
+
+        .step-nav-item .dot.active {
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            color: #fff;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15), var(--shadow-sm);
+            transform: scale(1.1);
+        }
+
+        .step-nav-item .dot.inactive {
+            background: var(--color-bg);
+            color: var(--color-text-muted);
+            border-color: var(--color-border);
+        }
+
+        .step-nav-item .label {
+            font-size: var(--font-size-xs);
+            color: var(--color-text-muted);
+            font-weight: var(--font-weight-medium);
+            text-align: center;
+            transition: all 0.3s ease;
+            max-width: 100px;
+        }
+
+        .step-nav-item .label.active {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .el-form-item {
+            margin-bottom: var(--space-lg);
+        }
+
+        .el-form-item__label {
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-text-primary);
+            font-size: var(--font-size-base);
+            margin-bottom: var(--space-sm);
+        }
+
+        .el-input__wrapper {
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border-color: var(--color-border);
+            padding: 10px 16px;
+        }
+
+        .el-input__wrapper:hover {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+        }
+
+        .el-input__wrapper.is-focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+
+        .el-textarea__inner {
+            border-radius: var(--radius-lg);
+            border-color: var(--color-border);
+            box-shadow: var(--shadow-sm);
+            font-size: var(--font-size-base);
+            line-height: 1.6;
+        }
+
+        .el-textarea__inner:hover {
+            border-color: var(--color-primary);
+        }
+
+        .el-textarea__inner:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+
+        .el-button {
+            border-radius: var(--radius-lg);
+            font-weight: var(--font-weight-medium);
+            transition: all 0.2s ease;
+        }
+
+        .el-button--primary {
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+            border: none;
+            box-shadow: var(--shadow-md);
+        }
+
+        .el-button--primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
+        }
+
+        .el-button--success {
+            background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+            border: none;
+            box-shadow: var(--shadow-md);
+        }
+
+        .el-button--success:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .el-button--primary.is-plain {
+            background: transparent;
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+
+        .el-button--primary.is-plain:hover {
+            background: var(--color-primary-light);
+            border-color: var(--color-primary);
+        }
+
+        .el-tabs__header {
+            margin-bottom: var(--space-xl);
+        }
+
+        .el-tabs__item {
+            font-weight: var(--font-weight-medium);
+            font-size: var(--font-size-base);
+            color: var(--color-text-secondary);
+            padding: var(--space-md) var(--space-xl);
+        }
+
+        .el-tabs__item.is-active {
+            color: var(--color-primary);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .el-tabs__active-bar {
+            background: var(--color-primary);
+            height: 3px;
+            border-radius: var(--radius-full);
+        }
+
+        .el-upload-dragger {
+            border-radius: var(--radius-xl);
+            border: 2px dashed var(--color-border);
+            padding: var(--space-3xl) var(--space-xl);
+            transition: all 0.3s ease;
+            background: rgba(248, 250, 252, 0.5);
+        }
+
+        .el-upload-dragger:hover {
+            border-color: var(--color-primary);
+            background: rgba(79, 70, 229, 0.03);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+        }
+
+        .el-upload__text em {
+            color: var(--color-primary);
+            font-style: normal;
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .el-tag {
+            border-radius: var(--radius-full);
+            padding: var(--space-xs) var(--space-lg);
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-medium);
+            border: none;
+        }
+
+        .el-tag--primary {
+            background: var(--color-primary-light);
+            color: var(--color-primary);
+        }
+
+        .el-progress {
+            --el-progress-text-color: var(--color-text-secondary);
+        }
+
+        .evaluation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-xl);
+            margin: var(--space-xl) 0;
+        }
+
+        .interview-review-item {
+            margin-bottom: var(--space-sm);
+            padding: var(--space-md);
+            border-radius: var(--radius-md);
+        }
+
+        .interview-review-item.interviewer {
+            background: rgba(79, 70, 229, 0.05);
+            border-left: 3px solid var(--color-primary);
+        }
+
+        .interview-review-item.candidate {
+            background: rgba(16, 185, 129, 0.05);
+            border-left: 3px solid var(--color-success);
+            margin-left: var(--space-lg);
+        }
+
+        .interview-review-role {
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-xs);
+            font-size: var(--font-size-xs);
+        }
+
+        .interview-review-role.interviewer {
+            color: var(--color-primary);
+        }
+
+        .interview-review-role.candidate {
+            color: var(--color-success);
+        }
+
+        .interview-review-content {
+            white-space: pre-wrap;
+            line-height: 1.5;
+            color: var(--color-text-primary);
+            font-size: var(--font-size-xs);
+        }
+
+        .action-bar {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-md);
+            margin-top: var(--space-md);
+        }
+
+        .step-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--space-sm);
+            margin-top: var(--space-md);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="main-container">
+            <div class="header" v-if="step === 1">
+                <div class="header-icon">🤖</div>
+                <h1>AI 模拟面试</h1>
+                <p>基于简历内容，AI 面试官会针对性地拷打八股和项目经验</p>
+            </div>
+
+            <!-- 简化步骤导航（非步骤1时显示） -->
+            <div class="step-nav-compact" v-if="step > 1">
+                <div :class="['step-dot', step >= 1 ? 'active' : '']" @click="step = 1" title="模型设置">1</div>
+                <div class="step-line"></div>
+                <div :class="['step-dot', step >= 2 ? 'active' : '']">2</div>
+                <div class="step-line"></div>
+                <div :class="['step-dot', step >= 3 ? 'active' : '']">3</div>
+                <div class="step-line"></div>
+                <div :class="['step-dot', step >= 4 ? 'active' : '']">4</div>
+            </div>
+
+            <!-- 步骤导航（仅步骤1显示） -->
+            <div class="step-nav" v-if="step === 1" :style="{ '--progress': (step - 1) / 3 }">
+                <div class="step-nav-item">
+                    <div :class="['dot', step >= 1 ? 'active' : 'inactive']">1</div>
+                    <span :class="['label', step >= 1 ? 'active' : '']">模型设置</span>
+                </div>
+                <div class="step-nav-item">
+                    <div :class="['dot', step >= 2 ? 'active' : 'inactive']">2</div>
+                    <span :class="['label', step >= 2 ? 'active' : '']">上传简历</span>
+                </div>
+                <div class="step-nav-item">
+                    <div :class="['dot', step >= 3 ? 'active' : 'inactive']">3</div>
+                    <span :class="['label', step >= 3 ? 'active' : '']">模拟面试</span>
+                </div>
+                <div class="step-nav-item">
+                    <div :class="['dot', step >= 4 ? 'active' : 'inactive']">4</div>
+                    <span :class="['label', step >= 4 ? 'active' : '']">面试报告</span>
+                </div>
+            </div>
+
+            <!-- 步骤 1: 模型设置 -->
+            <div class="card" v-if="step === 1">
+                <div class="step-title">1. 模型设置</div>
+                <p style="color: var(--color-text-secondary); margin-bottom: var(--space-xl); font-size: var(--font-size-base);">选择模型预设或手动填写 API 信息。信息仅在当前浏览器中保存，不会上传。</p>
+                <div class="api-presets">
+                    <el-button type="primary" plain @click="setPreset('openai')">OpenAI</el-button>
+                    <el-button type="primary" plain @click="setPreset('deepseek')">DeepSeek</el-button>
+                    <el-button type="primary" plain @click="setPreset('qwen')">通义千问</el-button>
+                    <el-button type="primary" plain @click="setPreset('glm')">智谱 GLM</el-button>
+                </div>
+                <el-form label-position="top">
+                    <el-form-item label="API Key">
+                        <el-input v-model="form.apiKey" placeholder="sk-..." type="password" show-password></el-input>
+                    </el-form-item>
+                    <el-form-item label="API Base URL">
+                        <el-input v-model="form.baseUrl" placeholder="https://api.openai.com/v1"></el-input>
+                    </el-form-item>
+                    <el-form-item label="模型名称">
+                        <el-input v-model="form.model" placeholder="gpt-4o / deepseek-chat / qwen-plus"></el-input>
+                    </el-form-item>
+                </el-form>
+                <div class="step-actions">
+                    <el-button type="primary" :disabled="!form.apiKey" @click="testConnection" :loading="loading">测试连接</el-button>
+                    <el-button type="success" :disabled="!form.apiKey" @click="step = 2">下一步：上传简历</el-button>
+                </div>
+            </div>
+
+            <!-- 步骤 2: 上传简历 -->
+            <div class="card" v-if="step === 2">
+                <div class="step-title">2. 上传简历</div>
+                <el-tabs v-model="resumeTab">
+                    <el-tab-pane label="粘贴文本" name="text">
+                        <el-input v-model="resumeText" type="textarea" :rows="6" placeholder="粘贴简历内容，可以是一段项目经历或完整简历..."></el-input>
+                    </el-tab-pane>
+                    <el-tab-pane label="上传 PDF" name="pdf">
+                        <el-upload drag accept=".pdf" :auto-upload="false" :on-change="handlePdfUpload">
+                            <el-icon class="el-icon--upload" size="32"><upload-filled /></el-icon>
+                            <div class="el-upload__text">拖拽 PDF 到这里或 <em>点击上传</em></div>
+                            <div style="color: var(--color-text-muted); font-size: var(--font-size-sm); margin-top: var(--space-sm);">支持 .pdf 格式文件</div>
+                        </el-upload>
+                    </el-tab-pane>
+                </el-tabs>
+                <div class="step-actions">
+                    <el-button type="primary" @click="parseResume" :loading="loading">解析简历</el-button>
+                    <el-button @click="step = 1">上一步</el-button>
+                </div>
+
+                <!-- 解析结果 -->
+                <div class="report-card" v-if="resumeParsed" style="margin-top: var(--space-lg);">
+                    <div class="report-card-title">📄 简历解析结果</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">姓名</div>
+                            <div class="info-value">{{ resume.name || '未识别' }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">工作年限</div>
+                            <div class="info-value">{{ resume.experience_years || '未识别' }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">学历</div>
+                            <div class="info-value">{{ resume.education || '未识别' }}</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: var(--space-md);">
+                        <div class="info-label" style="margin-bottom: var(--space-xs);">技术栈</div>
+                        <el-tag class="skill-tag" v-for="skill in resume.skills" :key="skill" type="primary">{{ skill }}</el-tag>
+                        <span v-if="!resume.skills.length" style="color: var(--color-text-muted);">未识别</span>
+                    </div>
+                    <div style="margin-top: var(--space-md);" v-if="resume.projects && resume.projects.length">
+                        <div class="info-label" style="margin-bottom: var(--space-xs);">项目经历</div>
+                        <div class="info-value">{{ resume.projects.join(', ') }}</div>
+                    </div>
+                    <div style="margin-top: var(--space-md);" v-if="resume.summary">
+                        <div class="info-label" style="margin-bottom: var(--space-xs);">简历摘要</div>
+                        <div style="color: var(--color-text-secondary); line-height: 1.5; font-size: var(--font-size-sm);">{{ resume.summary }}</div>
+                    </div>
+                    <div class="action-bar">
+                        <el-button type="success" @click="startInterview" :loading="loading" size="large">开始面试</el-button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 步骤 3: 面试对话 -->
+            <div class="card interview-step" v-if="step === 3">
+                <div class="step-title">3. 模拟面试</div>
+                <div class="chat-container" ref="chatContainer">
+                    <div v-for="(msg, index) in chatMessages" :key="index" class="message">
+                        <div v-if="msg.role === 'interviewer'" class="message-avatar interviewer">👨‍💼</div>
+                        <div v-else class="message-avatar candidate">🙋</div>
+                        <div :class="['message-body', msg.role]">
+                            {{ msg.content }}
+                        </div>
+                    </div>
+                    <div v-if="streaming" class="message">
+                        <div class="message-avatar interviewer">👨‍💼</div>
+                        <div class="message-body interviewer" style="color: var(--color-text-muted);">面试官正在输入...</div>
+                    </div>
+                </div>
+                <div class="chat-input">
+                    <el-input v-model="userAnswer" placeholder="输入你的回答..." @keyup.enter="sendAnswer" :disabled="finished || streaming"></el-input>
+                    <el-button type="primary" @click="sendAnswer" :loading="streaming" :disabled="finished || !userAnswer.trim()">发送</el-button>
+                </div>
+                <div class="action-bar">
+                    <el-button @click="finishInterview" type="success" v-if="!finished">结束面试并查看报告</el-button>
+                    <el-button @click="reset" type="info">重新开始</el-button>
+                </div>
+            </div>
+
+            <!-- 步骤 4: 面试报告 -->
+            <div class="card" v-if="step === 4">
+                <div class="step-title">4. 面试报告</div>
+                <div v-if="!evaluation" style="text-align: center; padding: var(--space-3xl); color: var(--color-text-muted); font-size: var(--font-size-lg);">正在生成报告...</div>
+                <div v-else>
+                    <!-- 综合评分 -->
+                    <div class="report-card">
+                        <div class="report-card-title">📊 综合评分</div>
+                        <div class="score-circle">
+                            <div class="score-number">{{ evaluation.total_score || 0 }}</div>
+                            <div class="score-label">综合评分 / 100</div>
+                        </div>
+                        <div style="text-align: center; margin-top: var(--space-md);">
+                            <span :class="['recommendation-tag', recommendationColorClass]">{{ evaluation.recommendation || '待定' }}</span>
+                        </div>
+                    </div>
+
+                    <!-- 维度评分 -->
+                    <div class="report-card" v-if="evaluation.dimensions">
+                        <div class="report-card-title">📈 维度评分</div>
+                        <div v-for="(score, name) in evaluation.dimensions" :key="name" class="dimension-bar">
+                            <div style="display: flex; align-items: center; margin-bottom: var(--space-sm);">
+                                <span style="width: 80px; font-weight: var(--font-weight-semibold); color: var(--color-text-primary); font-size: var(--font-size-sm);">{{ name }}</span>
+                                <el-progress :percentage="parseInt(score)" :stroke-width="12" style="flex: 1; margin: 0 var(--space-md);" :color="scoreColor(parseInt(score))"></el-progress>
+                                <span style="width: 50px; text-align: right; font-weight: var(--font-weight-bold); color: var(--color-primary); font-size: var(--font-size-sm);">{{ score }}/100</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 优点与不足 -->
+                    <div class="evaluation-grid" v-if="evaluation.strengths || evaluation.weaknesses">
+                        <div class="report-card" v-if="evaluation.strengths && evaluation.strengths.length">
+                            <div class="report-card-title">✅ 优点</div>
+                            <div class="list-card">
+                                <ul>
+                                    <li v-for="(item, idx) in evaluation.strengths" :key="'s'+idx">{{ item }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="report-card" v-if="evaluation.weaknesses && evaluation.weaknesses.length">
+                            <div class="report-card-title">⚠️ 待改进</div>
+                            <div class="list-card">
+                                <ul>
+                                    <li v-for="(item, idx) in evaluation.weaknesses" :key="'w'+idx">{{ item }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 总体评价 -->
+                    <div class="report-card" v-if="evaluation.comment">
+                        <div class="report-card-title">💬 总体评价</div>
+                        <div style="color: var(--color-text-primary); line-height: 1.5; font-size: var(--font-size-sm);">{{ evaluation.comment }}</div>
+                    </div>
+
+                    <!-- 面试对话回顾 -->
+                    <div class="report-card" v-if="chatMessages.length">
+                        <div class="report-card-title">📝 面试对话回顾</div>
+                        <div v-for="(msg, index) in chatMessages" :key="index" :class="['interview-review-item', msg.role]">
+                            <div :class="['interview-review-role', msg.role]">{{ msg.role === 'interviewer' ? '面试官' : '候选人' }}</div>
+                            <div class="interview-review-content">{{ msg.content }}</div>
+                        </div>
+                    </div>
+
+                    <div class="action-bar">
+                        <el-button type="primary" @click="reset" size="large">重新开始</el-button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer">AI 模拟面试 · 本地部署 · 数据安全</div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        const { ElMessage } = ElementPlus;
+
+        createApp({
+            data() {
+                return {
+                    step: 1,
+                    loading: false,
+                    resumeTab: 'text',
+                    resumeText: '',
+                    pdfData: '',
+                    resumeParsed: false,
+                    resume: {},
+                    chatMessages: [],
+                    userAnswer: '',
+                    streaming: false,
+                    finished: false,
+                    evaluation: null,
+                    form: {
+                        apiKey: localStorage.getItem('ai_api_key') || '',
+                        baseUrl: localStorage.getItem('ai_base_url') || 'https://api.openai.com/v1',
+                        model: localStorage.getItem('ai_model') || 'gpt-4o'
+                    }
+                };
+            },
+            computed: {
+                recommendationColorClass() {
+                    const rec = this.evaluation?.recommendation;
+                    if (rec === '通过') return 'recommendation-pass';
+                    if (rec === '不通过') return 'recommendation-fail';
+                    return 'recommendation-pending';
+                }
+            },
+            methods: {
+                scoreColor(score) {
+                    if (score >= 80) return '#10B981';
+                    if (score >= 60) return '#F59E0B';
+                    return '#EF4444';
+                },
+                setPreset(name) {
+                    const presets = {
+                        openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },
+                        deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+                        qwen: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+                        glm: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4' }
+                    };
+                    this.form.baseUrl = presets[name].baseUrl;
+                    this.form.model = presets[name].model;
+                },
+                saveConfig() {
+                    localStorage.setItem('ai_api_key', this.form.apiKey);
+                    localStorage.setItem('ai_base_url', this.form.baseUrl);
+                    localStorage.setItem('ai_model', this.form.model);
+                },
+                async testConnection() {
+                    this.saveConfig();
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/health');
+                        if (res.ok) {
+                            ElMessage.success('连接正常');
+                        } else {
+                            ElMessage.error('连接失败');
+                        }
+                    } catch (e) {
+                        ElMessage.error('连接失败：' + e.message);
+                    }
+                    this.loading = false;
+                },
+                handlePdfUpload(file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const dataUrl = e.target.result;
+                        this.pdfData = dataUrl.split(',')[1];
+                        this.resumeText = '';
+                        this.resumeTab = 'text';
+                        ElMessage.success('PDF 文件已上传，请点击「解析简历」');
+                    };
+                    reader.readAsDataURL(file.raw);
+                },
+                async parseResume() {
+                    this.saveConfig();
+                    if (!this.resumeText.trim() && !this.pdfData) {
+                        ElMessage.warning('请先输入简历内容或上传 PDF 文件');
+                        return;
+                    }
+                    this.loading = true;
+                    try {
+                        let res, data;
+                        if (this.pdfData) {
+                            res = await fetch('/api/parse-pdf', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ pdf_data: this.pdfData })
+                            });
+                        } else {
+                            res = await fetch('/api/parse-resume', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ text: this.resumeText })
+                            });
+                        }
+                        if (!res.ok) {
+                            const errorData = await res.json().catch(() => ({}));
+                            throw new Error(errorData.detail || `请求失败: ${res.status}`);
+                        }
+                        data = await res.json();
+                        this.resume = data;
+                        this.resumeParsed = true;
+                        ElMessage.success('简历解析成功');
+                    } catch (e) {
+                        ElMessage.error('解析失败：' + e.message);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async startInterview() {
+                    this.saveConfig();
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/start-interview', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                api_key: this.form.apiKey,
+                                base_url: this.form.baseUrl,
+                                model: this.form.model,
+                                resume_text: this.resume.raw_text || this.resumeText,
+                                resume_summary: this.resume.summary,
+                                candidate_name: this.resume.name,
+                                skills: this.resume.skills,
+                                session_id: 'session_1'
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.status === 'ready') {
+                            this.step = 3;
+                            this.chatMessages = [];
+                            this.userAnswer = '';
+                            this.finished = false;
+                            this.evaluation = null;
+                            await this.getFirstQuestion();
+                        } else {
+                            ElMessage.error(data.detail || '开始面试失败');
+                        }
+                    } catch (e) {
+                        ElMessage.error('开始面试失败：' + e.message);
+                    }
+                    this.loading = false;
+                },
+                async getFirstQuestion() {
+                    this.streaming = true;
+                    try {
+                        const res = await fetch('/api/first-question', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ session_id: 'session_1' })
+                        });
+                        const data = await res.json();
+                        this.chatMessages.push({ role: 'interviewer', content: data.response });
+                        this.$nextTick(() => this.scrollToBottom());
+                    } catch (e) {
+                        ElMessage.error('获取问题失败：' + e.message);
+                    }
+                    this.streaming = false;
+                },
+                async sendAnswer() {
+                    if (!this.userAnswer.trim()) return;
+                    this.chatMessages.push({ role: 'candidate', content: this.userAnswer });
+                    const answer = this.userAnswer;
+                    this.userAnswer = '';
+                    this.streaming = true;
+                    this.$nextTick(() => this.scrollToBottom());
+
+                    try {
+                        const res = await fetch('/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ session_id: 'session_1', answer: answer })
+                        });
+                        const data = await res.json();
+                        this.chatMessages.push({ role: 'interviewer', content: data.response });
+                        this.finished = data.finished;
+                        if (this.finished) {
+                            this.finishInterview();
+                        }
+                    } catch (e) {
+                        ElMessage.error('发送失败：' + e.message);
+                    }
+                    this.streaming = false;
+                    this.$nextTick(() => this.scrollToBottom());
+                },
+                async finishInterview() {
+                    this.finished = true;
+                    this.step = 4;
+                    try {
+                        const res = await fetch('/api/evaluation?session_id=session_1');
+                        const data = await res.json();
+                        this.evaluation = data;
+                    } catch (e) {
+                        ElMessage.error('获取评估失败：' + e.message);
+                    }
+                },
+                scrollToBottom() {
+                    const container = this.$refs.chatContainer;
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                },
+                reset() {
+                    this.step = 1;
+                    this.resumeText = '';
+                    this.pdfData = '';
+                    this.resumeParsed = false;
+                    this.resume = {};
+                    this.chatMessages = [];
+                    this.userAnswer = '';
+                    this.finished = false;
+                    this.evaluation = null;
+                }
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>
