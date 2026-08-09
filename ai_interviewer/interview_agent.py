@@ -12,7 +12,9 @@ import httpx
 
 from ai_interviewer.cache_engine.semantic_cache import SemanticCache
 from ai_interviewer.cache_engine.summarizer import SummarizationBuffer
+from ai_interviewer.config import get_settings
 from ai_interviewer.models import ConversationMessage
+from ai_interviewer.rag_engine.retriever import RAGRetriever, get_retriever
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,9 @@ _INTERVIEW_SYSTEM_PROMPT = """你是一位资深技术面试官，正在进行�
 
 ## 简历信息
 {resume_summary}
+
+## 知识库参考（RAG 检索结果，作为提问参考，不要照搬，可自由发挥追问方向）
+{rag_context}
 
 ## 当前进度
 已提问 {question_count}/{max_questions} 个问题
@@ -138,6 +143,10 @@ class InterviewAgent:
         self._cache = cache
         self._summarizer = SummarizationBuffer()
         self._sessions: dict[str, InterviewSession] = {}
+        self._settings = get_settings()
+        self._retriever: RAGRetriever | None = None
+        if self._settings.rag_enabled:
+            self._retriever = get_retriever()
 
     def create_session(self, session_id: str, resume_text: str, resume_summary: str,
                        candidate_name: str = "", skills: list[str] | None = None) -> InterviewSession:
@@ -149,7 +158,7 @@ class InterviewAgent:
             candidate_name=candidate_name,
             skills=skills or [],
         )
-        # 添加系统消息
+        # 添加系统消息（首次不检索 RAG，因为话题未确定）
         session.messages.append(ConversationMessage(
             role="system",
             content=self._build_system_prompt(session),
@@ -208,8 +217,9 @@ class InterviewAgent:
             session.is_finished = True
             return await self._generate_final_feedback(session)
 
-        # 更新系统提示词
-        session.messages[0].content = self._build_system_prompt(session)
+        # 更新系统提示词（注入 RAG 检索的知识上下文）
+        rag_context = await self._get_rag_context(session)
+        session.messages[0].content = self._build_system_prompt(session, rag_context)
 
         # 调用 LLM 获取面试官回复
         response = await self._call_llm(session)
@@ -296,14 +306,29 @@ class InterviewAgent:
         except Exception as e:
             return f"[模型调用失败: {e}]"
 
-    def _build_system_prompt(self, session: InterviewSession) -> str:
+    def _build_system_prompt(self, session: InterviewSession, rag_context: str = "") -> str:
         """构建面试官系统提示词"""
         return _INTERVIEW_SYSTEM_PROMPT.format(
             resume_summary=session.resume_summary,
+            rag_context=rag_context or "（无相关知识库参考）",
             question_count=session.question_count,
             max_questions=session.max_questions,
             current_topic=session.current_topic or "尚未开始",
         )
+
+    async def _get_rag_context(self, session: InterviewSession) -> str:
+        """检索知识库，返回格式化的参考知识上下文"""
+        if not self._retriever:
+            return ""
+        try:
+            result = await self._retriever.retrieve_by_skills(
+                skills=session.skills,
+                current_topic=session.current_topic,
+            )
+            return result.format_context()
+        except Exception as e:
+            logger.warning("RAG 检索失败，跳过: %s", e)
+            return ""
 
     async def _generate_final_feedback(self, session: InterviewSession) -> str:
         """生成面试结束反馈"""

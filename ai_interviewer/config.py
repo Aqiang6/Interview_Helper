@@ -43,6 +43,11 @@ class AppSettings(BaseSettings):
     summary_token_threshold: int = Field(default=4000, ge=500, description="触发摘要压缩的 Token 阈值")
     summary_target_ratio: float = Field(default=0.4, gt=0.0, lt=1.0, description="压缩目标比率")
 
+    # ── RAG 知识库 ──
+    rag_enabled: bool = Field(default=True, description="是否启用 RAG 知识库检索")
+    rag_top_k: int = Field(default=3, ge=1, le=10, description="RAG 检索返回的条目数")
+    rag_min_score: float = Field(default=0.3, ge=0.0, le=1.0, description="RAG 检索最低相似度阈值")
+
     # ── OpenTelemetry ──
     otel_exporter_otlp_endpoint: str = Field(default="http://localhost:4317")
     otel_service_name: str = Field(default="ai-agent-interviewer")

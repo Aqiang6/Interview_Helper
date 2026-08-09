@@ -256,6 +256,43 @@ async def api_health():
 
 
 # ═══════════════════════════════════════════
+#  RAG 知识库 API
+# ═══════════════════════════════════════════
+
+@app.get("/api/knowledge-base")
+async def api_knowledge_base_overview():
+    """知识库概览"""
+    from ai_interviewer.rag_engine.knowledge_base import get_knowledge_base
+    kb = get_knowledge_base()
+    if not kb.is_ready:
+        await kb.load()
+    return kb.to_dict()
+
+
+@app.get("/api/knowledge-base/categories")
+async def api_knowledge_base_categories():
+    """获取知识库分类"""
+    from ai_interviewer.rag_engine.knowledge_base import get_knowledge_base
+    kb = get_knowledge_base()
+    if not kb.is_ready:
+        await kb.load()
+    return {"categories": kb.get_categories()}
+
+
+@app.get("/api/knowledge-base/search")
+async def api_knowledge_base_search(q: str = "", top_k: int = 5):
+    """搜索知识库"""
+    from ai_interviewer.rag_engine.retriever import get_retriever
+    retriever = get_retriever()
+    result = await retriever.retrieve(q, top_k=top_k)
+    return {
+        "query": result.query,
+        "items": [item.to_dict() for item in result.items],
+        "scores": result.scores,
+    }
+
+
+# ═══════════════════════════════════════════
 #  静态文件挂载
 # ═══════════════════════════════════════════
 
