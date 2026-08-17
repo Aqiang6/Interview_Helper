@@ -48,6 +48,11 @@ class AppSettings(BaseSettings):
     rag_top_k: int = Field(default=3, ge=1, le=10, description="RAG 检索返回的条目数")
     rag_min_score: float = Field(default=0.3, ge=0.0, le=1.0, description="RAG 检索最低相似度阈值")
 
+    # ── LangGraph Agent ──
+    agent_max_questions: int = Field(default=15, ge=3, le=50, description="单次面试最大问题数")
+    agent_recursion_limit: int = Field(default=10, ge=3, le=25, description="LangGraph 递归限制")
+    agent_enable_tools: bool = Field(default=True, description="是否启用 Tool Use")
+
     # ── OpenTelemetry ──
     otel_exporter_otlp_endpoint: str = Field(default="http://localhost:4317")
     otel_service_name: str = Field(default="ai-agent-interviewer")

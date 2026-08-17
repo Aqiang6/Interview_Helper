@@ -1,37 +1,33 @@
-# AI Agent Interviewer - 智能模拟面试系统
+# AI Agent Interviewer - 基于 LangGraph 的智能面试系统
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-green)
-![Vue](https://img.shields.io/badge/Vue-3-orange)
-![License](https://img.shields.io/badge/License-MIT-yellow)
-
-一个现代化的 AI 模拟面试系统，支持简历智能解析、针对性技术面试、语义缓存优化和可视化评估报告。专为求职者、面试官和技术面试准备者设计。
+基于 **LangGraph** 构建的 AI 模拟面试系统，实现 **Tool Use / Planning / Memory** 三大 Agent 核心能力，集成 **RAG 知识库**增强提问深度，支持简历智能解析和全链路评估报告。
 
 ## ✨ 核心功能
+
+### 🤖 LangGraph Agent 架构
+- **Tool Use**: 4 个工具（知识库检索、回答评估、话题选择、难度调整）
+- **Planning**: 基于简历技能动态规划面试话题和流程
+- **Memory**: 短期记忆（对话历史）+ 长期记忆（候选人画像）
+- **条件路由**: 根据回答质量自动决策追问/换题/结束
 
 ### 📄 智能简历解析
 - **多格式支持**: PDF 文件上传、纯文本粘贴
 - **自动信息提取**: 姓名、学历、工作年限、技术栈、项目经历
 - **OCR 增强**: 自动检测扫描件 PDF，调用 Tesseract OCR 识别中文
-- **乱码处理**: 智能识别并降级处理编码错误
+- **多引擎降级**: PyMuPDF → pdfplumber → PyPDF2 → OCR
 
-### 🤖 AI 模拟面试
-- **简历驱动**: 基于简历内容自动生成面试问题
-- **技术八股文**: 针对 Java、Spring、数据库、分布式等核心技术提问
-- **项目拷打**: 深入询问项目细节、技术选型和架构设计
-- **流式响应**: SSE 实时展示面试官提问过程
+### 🔍 RAG 知识库
+- **向量检索**: 基于 sentence-transformers 语义相似度
+- **知识覆盖**: Java 并发、分布式系统、数据库、AI Agent 四大方向
+- **动态增强**: 面试官根据当前话题实时检索参考知识
 
 ### 📊 面试评估报告
-- **综合评分**: 0-100 分综合评价
-- **技能分析**: 各项技能的掌握程度评估
-- **改进建议**: 针对弱项提供学习建议
-- **对话回顾**: 完整的面试对话记录
+- **改进建议**: 针对弱项提供学习方向
 
-### ⚡ 高级特性
-- **语义缓存引擎**: 智能缓存相似对话，降低 API 调用成本
-- **多 LLM 支持**: OpenAI、DeepSeek、通义千问、智谱 GLM 等
-- **可观测性**: OpenTelemetry 集成，监控性能指标
-- **加密存储**: 用户 API Key 在浏览器端加密存储
+### ⚡ 性能优化
+- **语义缓存**: LRU + TTL + 向量相似度匹配
+- **对话压缩**: tiktoken 计数 + LLM 摘要压缩
+- **SSE 流式**: 实时展示面试官提问
 
 ## 🚀 快速开始
 
@@ -95,37 +91,48 @@ start_app.bat
 ```
 ai-agent-interviewer/
 ├── ai_interviewer/              # Python 后端
+│   ├── agent/                  # LangGraph Agent 模块
+│   │   ├── __init__.py
+│   │   ├── state.py            # Agent 状态（TypedDict）
+│   │   ├── tools.py            # Agent 工具集（Tool Use）
+│   │   ├── nodes.py            # Graph 节点（Planning）
+│   │   └── graph.py            # LangGraph 工作流
 │   ├── cache_engine/            # 语义缓存引擎
 │   │   ├── semantic_cache.py    # 语义缓存核心
 │   │   ├── embedding.py         # 向量嵌入
-│   │   ├── summarizer.py        # 对话摘要压缩
+│   │   ├── summarizer.py        # 对话摘要压缩（tiktoken）
 │   │   ├── metrics.py           # 缓存指标监控
 │   │   └── benchmark.py         # 性能基准测试
+│   ├── rag_engine/              # RAG 知识库引擎
+│   │   ├── knowledge_base.py   # 知识库管理
+│   │   ├── retriever.py         # 向量检索器
+│   │   └── data/                # 知识库数据（JSON）
 │   ├── __init__.py
 │   ├── app.py                   # FastAPI 应用入口
 │   ├── config.py                # 配置管理
-│   ├── interview_agent.py       # 面试对话 Agent
+│   ├── interview_agent.py       # 旧版面试 Agent（兼容）
 │   ├── models.py                # 数据模型
-│   └── resume_parser.py         # 简历解析器（PDF/文本）
+│   └── resume_parser.py         # 简历解析器（PDF/OCR）
 ├── frontend/                    # 前端界面
 │   └── index.html               # 单页 Vue 3 应用
 ├── .env.example                 # 环境变量模板
 ├── .gitignore                   # Git 忽略文件
 ├── pyproject.toml               # 项目依赖配置
 ├── start_app.bat                # Windows 启动脚本
-├── run_benchmark.bat            # 缓存基准测试
 └── README.md                    # 本文件
 ```
 
 ## 🔧 技术架构
 
 ### 后端架构
+- **Agent 框架**: LangGraph - 状态图驱动的 Agent 工作流
+- **LLM 调用**: langchain-openai (ChatOpenAI) - 原生工具调用
 - **Web 框架**: FastAPI - 高性能异步 API
-- **PDF 解析**: PyMuPDF (fitz) / pdfplumber / PyPDF2
+- **PDF 解析**: PyMuPDF / pdfplumber / PyPDF2 智能降级
 - **OCR 引擎**: Tesseract 5.4 + pytesseract（扫描件支持）
-- **AI 缓存**: Sentence-Transformers + 余弦相似度检索
-- **可观测性**: OpenTelemetry（日志、指标、追踪）
-- **加密**: cryptography.Fernet（API Key 加密）
+- **RAG 检索**: sentence-transformers + FAISS 向量索引
+- **缓存引擎**: Sentence-Transformers + 余弦相似度 + LRU/TTL
+- **Token 管理**: tiktoken 对话计数与摘要压缩
 
 ### 前端架构
 - **框架**: Vue 3 + Composition API
@@ -133,6 +140,34 @@ ai-agent-interviewer/
 - **状态管理**: Vue 响应式数据
 - **CSS**: CSS 自定义属性设计系统
 - **API 通信**: Fetch API + SSE
+
+### LangGraph Agent 工作流
+
+```
+START → plan_interview → [路由] → generate_question → END (第一个问题)
+                              ↓ (有候选人回答)
+                        evaluate_response → decide_next
+                              ↓              ↓        ↓
+                         followup       next_topic    end
+                              ↓              ↓        ↓
+                        generate_question  generate_question → generate_evaluation → END
+```
+
+#### Tool Use（工具调用）
+Agent 可调用 4 个工具辅助决策：
+- `search_knowledge_base`：检索 RAG 知识库
+- `analyze_candidate_response`：评估回答质量
+- `select_next_topic`：选择下一个话题
+- `adjust_difficulty`：调整问题难度
+
+#### Planning（面试规划）
+- 面试开始时根据简历技能生成话题列表
+- 按优先级排序（Redis > Java > Spring > 数据库 > 分布式）
+- 根据回答质量动态调整面试流程
+
+#### Memory（记忆管理）
+- **短期记忆**：完整对话历史（LangGraph State）
+- **长期记忆**：候选人画像（技能得分、强弱项、已答话题）
 
 ### 缓存系统
 - **向量嵌入**: sentence-transformers/all-MiniLM-L6-v2
@@ -238,6 +273,6 @@ MIT License - 详见 [LICENSE](LICENSE) 文件。
 
 ---
 
-**立即体验 AI 模拟面试**: [http://localhost:8000](http://localhost:8000)
+
 
 如有问题或建议，请在 GitHub 仓库提交 Issue。

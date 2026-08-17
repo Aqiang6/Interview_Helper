@@ -302,7 +302,6 @@
             background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
             color: var(--color-success);
             border: 2px solid rgba(16, 185, 129, 0.1);
-            margin-left: auto;
             order: 2;
         }
 
@@ -978,62 +977,18 @@
                 <div class="step-title">4. 面试报告</div>
                 <div v-if="!evaluation" style="text-align: center; padding: var(--space-3xl); color: var(--color-text-muted); font-size: var(--font-size-lg);">正在生成报告...</div>
                 <div v-else>
-                    <!-- 综合评分 -->
+                    <!-- 面试官建议 -->
                     <div class="report-card">
-                        <div class="report-card-title">📊 综合评分</div>
-                        <div class="score-circle">
-                            <div class="score-number">{{ evaluation.total_score || 0 }}</div>
-                            <div class="score-label">综合评分 / 100</div>
-                        </div>
-                        <div style="text-align: center; margin-top: var(--space-md);">
-                            <span :class="['recommendation-tag', recommendationColorClass]">{{ evaluation.recommendation || '待定' }}</span>
-                        </div>
-                    </div>
-
-                    <!-- 维度评分 -->
-                    <div class="report-card" v-if="evaluation.dimensions">
-                        <div class="report-card-title">📈 维度评分</div>
-                        <div v-for="(score, name) in evaluation.dimensions" :key="name" class="dimension-bar">
-                            <div style="display: flex; align-items: center; margin-bottom: var(--space-sm);">
-                                <span style="width: 80px; font-weight: var(--font-weight-semibold); color: var(--color-text-primary); font-size: var(--font-size-sm);">{{ name }}</span>
-                                <el-progress :percentage="parseInt(score)" :stroke-width="12" style="flex: 1; margin: 0 var(--space-md);" :color="scoreColor(parseInt(score))"></el-progress>
-                                <span style="width: 50px; text-align: right; font-weight: var(--font-weight-bold); color: var(--color-primary); font-size: var(--font-size-sm);">{{ score }}/100</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 优点与不足 -->
-                    <div class="evaluation-grid" v-if="evaluation.strengths || evaluation.weaknesses">
-                        <div class="report-card" v-if="evaluation.strengths && evaluation.strengths.length">
-                            <div class="report-card-title">✅ 优点</div>
+                        <div class="report-card-title">💡 面试官建议</div>
+                        <div v-if="evaluation.improvement_suggestions && evaluation.improvement_suggestions.length">
                             <div class="list-card">
                                 <ul>
-                                    <li v-for="(item, idx) in evaluation.strengths" :key="'s'+idx">{{ item }}</li>
+                                    <li v-for="(item, idx) in evaluation.improvement_suggestions" :key="'i'+idx">{{ item }}</li>
                                 </ul>
                             </div>
                         </div>
-                        <div class="report-card" v-if="evaluation.weaknesses && evaluation.weaknesses.length">
-                            <div class="report-card-title">⚠️ 待改进</div>
-                            <div class="list-card">
-                                <ul>
-                                    <li v-for="(item, idx) in evaluation.weaknesses" :key="'w'+idx">{{ item }}</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 总体评价 -->
-                    <div class="report-card" v-if="evaluation.comment">
-                        <div class="report-card-title">💬 总体评价</div>
-                        <div style="color: var(--color-text-primary); line-height: 1.5; font-size: var(--font-size-sm);">{{ evaluation.comment }}</div>
-                    </div>
-
-                    <!-- 面试对话回顾 -->
-                    <div class="report-card" v-if="chatMessages.length">
-                        <div class="report-card-title">📝 面试对话回顾</div>
-                        <div v-for="(msg, index) in chatMessages" :key="index" :class="['interview-review-item', msg.role]">
-                            <div :class="['interview-review-role', msg.role]">{{ msg.role === 'interviewer' ? '面试官' : '候选人' }}</div>
-                            <div class="interview-review-content">{{ msg.content }}</div>
+                        <div v-else style="color: var(--color-text-muted); text-align: center; padding: var(--space-lg); font-size: var(--font-size-sm);">
+                            {{ evaluation.comment || '暂无补强建议' }}
                         </div>
                     </div>
 
@@ -1073,20 +1028,7 @@
                     }
                 };
             },
-            computed: {
-                recommendationColorClass() {
-                    const rec = this.evaluation?.recommendation;
-                    if (rec === '通过') return 'recommendation-pass';
-                    if (rec === '不通过') return 'recommendation-fail';
-                    return 'recommendation-pending';
-                }
-            },
             methods: {
-                scoreColor(score) {
-                    if (score >= 80) return '#10B981';
-                    if (score >= 60) return '#F59E0B';
-                    return '#EF4444';
-                },
                 setPreset(name) {
                     const presets = {
                         openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },

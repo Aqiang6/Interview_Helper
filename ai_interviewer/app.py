@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from ai_interviewer.interview_agent import InterviewAgent
+from ai_interviewer.agent import InterviewGraphAgent
 from ai_interviewer.resume_parser import parse_pdf, parse_text
 
 logger = logging.getLogger(__name__)
@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 #  全局面试 Agent 实例（API Key 运行时从请求中传入）
 # ═══════════════════════════════════════════
 
-_agent = InterviewAgent(api_key="")
-_sessions: dict[str, InterviewAgent] = {}
+_agent = InterviewGraphAgent(api_key="")
+_sessions: dict[str, InterviewGraphAgent] = {}
 
 # ══════════════════════════════════════════
 #  FastAPI 应用
@@ -51,10 +51,10 @@ app.add_middleware(
 #  工具函数
 # ═══════════════════════════════════════════
 
-def _get_agent(session_id: str) -> InterviewAgent:
+def _get_agent(session_id: str) -> InterviewGraphAgent:
     """获取或创建绑定到 session 的 Agent"""
     if session_id not in _sessions:
-        _sessions[session_id] = InterviewAgent(api_key="")
+        _sessions[session_id] = InterviewGraphAgent(api_key="")
     return _sessions[session_id]
 
 
@@ -158,7 +158,7 @@ async def api_start_interview(request: Request):
         raise HTTPException(status_code=400, detail="请先上传简历")
 
     session_id = data.get("session_id") or "session_1"
-    agent = InterviewAgent(api_key=api_key, base_url=base_url, model=model)
+    agent = InterviewGraphAgent(api_key=api_key, base_url=base_url, model=model)
     _sessions[session_id] = agent
 
     agent.create_session(
@@ -183,12 +183,17 @@ async def api_chat(request: Request):
     if not agent.get_session(session_id):
         raise HTTPException(status_code=404, detail="面试会话不存在，请先调用 /api/start-interview")
 
-    response = await agent.answer_and_ask(session_id, answer)
+    try:
+        response = await agent.answer_and_ask(session_id, answer)
+    except Exception as e:
+        logger.exception("面试对话失败")
+        response = f"（系统提示：生成回复时出错，请检查 API 配置。错误：{type(e).__name__}: {e}）"
+
     session = agent.get_session(session_id)
     return {
         "response": response,
-        "finished": session.is_finished if session else False,
-        "question_count": session.question_count if session else 0,
+        "finished": session.get("is_finished", False) if session else False,
+        "question_count": session.get("question_count", 0) if session else 0,
     }
 
 
@@ -199,19 +204,22 @@ async def api_first_question(request: Request):
     session_id = data.get("session_id", "session_1")
 
     agent = _get_agent(session_id)
-    response = await agent.get_first_question(session_id)
+    try:
+        response = await agent.get_first_question(session_id)
+    except Exception as e:
+        logger.exception("获取首题失败")
+        response = f"（系统提示：生成问题时出错，请检查 API 配置。错误：{type(e).__name__}: {e}）"
+
     session = agent.get_session(session_id)
     return {
         "response": response,
-        "finished": session.is_finished if session else False,
-        "question_count": session.question_count if session else 0,
+        "finished": session.get("is_finished", False) if session else False,
+        "question_count": session.get("question_count", 0) if session else 0,
     }
 
 
-async def _stream_response(agent: InterviewAgent, session_id: str, answer: str):
+async def _stream_response(agent: InterviewGraphAgent, session_id: str, answer: str):
     """流式返回面试官回复"""
-    # 这里简单模拟流式：先生成完整内容，再逐字发送
-    # 后续可接入真正的流式 LLM
     response = await agent.answer_and_ask(session_id, answer)
     session = agent.get_session(session_id)
 
@@ -221,7 +229,7 @@ async def _stream_response(agent: InterviewAgent, session_id: str, answer: str):
         yield f"data: {json.dumps({'content': chunk, 'finished': False}, ensure_ascii=False)}\n\n"
         await asyncio.sleep(0.03)
 
-    yield f"data: {json.dumps({'content': '', 'finished': session.is_finished if session else False, 'question_count': session.question_count if session else 0}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'content': '', 'finished': session.get('is_finished', False) if session else False, 'question_count': session.get('question_count', 0) if session else 0}, ensure_ascii=False)}\n\n"
 
 
 @app.post("/api/chat-stream")
@@ -253,6 +261,24 @@ async def api_evaluation(session_id: str = "session_1"):
 async def api_health():
     """健康检查"""
     return {"status": "ok"}
+
+
+@app.get("/api/agent-state")
+async def api_agent_state(session_id: str = "session_1"):
+    """查看 LangGraph Agent 内部状态（Planning + Memory）"""
+    agent = _get_agent(session_id)
+    state = agent.get_session(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return {
+        "candidate_profile": state.get("candidate_profile", {}),
+        "interview_plan": state.get("interview_plan", {}),
+        "current_topic": state.get("current_topic", ""),
+        "question_count": state.get("question_count", 0),
+        "max_questions": state.get("max_questions", 15),
+        "is_finished": state.get("is_finished", False),
+        "response_quality": state.get("response_quality", ""),
+    }
 
 
 # ═══════════════════════════════════════════
