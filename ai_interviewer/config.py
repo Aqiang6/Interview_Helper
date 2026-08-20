@@ -39,10 +39,6 @@ class AppSettings(BaseSettings):
     cache_ttl_seconds: int = Field(default=3600, ge=60, description="缓存 TTL（秒）")
     cache_max_size: int = Field(default=10000, ge=100, description="缓存最大条目数")
 
-    # ── 摘要压缩 ──
-    summary_token_threshold: int = Field(default=4000, ge=500, description="触发摘要压缩的 Token 阈值")
-    summary_target_ratio: float = Field(default=0.4, gt=0.0, lt=1.0, description="压缩目标比率")
-
     # ── RAG 知识库 ──
     rag_enabled: bool = Field(default=True, description="是否启用 RAG 知识库检索")
     rag_top_k: int = Field(default=3, ge=1, le=10, description="RAG 检索返回的条目数")

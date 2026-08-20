@@ -1,9 +1,8 @@
-"""上下文缓存引擎 - 语义缓存、摘要压缩、命中率统计"""
+"""上下文缓存引擎 - 语义缓存、命中率统计"""
 
 from ai_interviewer.cache_engine.embedding import EmbeddingService, get_embedding_service
 from ai_interviewer.cache_engine.metrics import CacheMetrics, get_cache_metrics
 from ai_interviewer.cache_engine.semantic_cache import SemanticCache
-from ai_interviewer.cache_engine.summarizer import SummarizationBuffer
 
 
 class CacheEngineFacade:
@@ -12,15 +11,10 @@ class CacheEngineFacade:
     def __init__(self) -> None:
         self._cache = SemanticCache()
         self._metrics = get_cache_metrics()
-        self._summarizer = SummarizationBuffer()
 
     @property
     def cache(self) -> SemanticCache:
         return self._cache
-
-    @property
-    def summarizer(self) -> SummarizationBuffer:
-        return self._summarizer
 
     async def warmup(self, resume_id: str, question: str, answer: str) -> None:
         """预热：将单条问答写入缓存"""
@@ -47,7 +41,6 @@ __all__ = [
     "EmbeddingService",
     "get_embedding_service",
     "SemanticCache",
-    "SummarizationBuffer",
     "CacheMetrics",
     "get_cache_metrics",
     "CacheEngineFacade",

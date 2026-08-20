@@ -3,7 +3,7 @@
 每个节点是面试流程中的一个步骤，通过 LangGraph 的条件边连接：
 1. plan_interview：分析简历，规划面试话题（Planning）
 2. generate_question：生成面试问题（Tool Use + RAG）
-3. evaluate_response：评估候选人回答（Memory 更新）
+3. evaluate_response：评估候选人回答（Memory 更新，LLM 深度分析）
 4. decide_next：决定下一步动作（追问/换题/结束）
 5. generate_evaluation：生成最终评估报告
 """
@@ -18,25 +18,33 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import ToolNode
 
 from ai_interviewer.agent.state import InterviewState
-from ai_interviewer.agent.tools import ALL_TOOLS
+from ai_interviewer.agent.topic_prioritizer import (
+    get_topic_prioritizer,
+    make_route_decision,
+    prioritize_by_jd,
+)
+from ai_interviewer.agent.tools import (
+    ALL_TOOLS,
+    _QUALITY_EVAL_SYSTEM,
+    _parse_quality_json,
+)
 
 logger = logging.getLogger(__name__)
 
 # ── 系统提示词 ──
 
-_INTERVIEWER_SYSTEM = """你是一位资深技术面试官，正在进行技术面试。
+_INTERVIEWER_SYSTEM = """你是一位资深技术面试官，正在针对岗位「{position_name}」进行技术面试。
 
 ## 面试策略
-1. 根据简历技能判断面试方向（AI Agent / 传统后端）
-2. 每次只问一个问题，层层递进，深度追问
-3. 根据候选人回答质量调整难度
-4. 可调用工具辅助决策
+1. 根据目标岗位 JD 决定问题方向和深度：JD 要求为【必备 required】的技能要深挖原理、源码、线上问题；JD 要求为【加分 bonus】的技能点到为止即可
+2. 当前话题要求强度: {topic_importance_label}（required=必须问到深层、preferred=问到中等深度、bonus=快速扫一遍）
+3. 每次只问一个问题，层层递进，深度追问
+4. 根据候选人回答质量调整难度
+5. 可调用工具辅助决策
 
 ## 可用工具
 - search_knowledge_base：检索技术知识库，获取参考面试题和答案
 - analyze_candidate_response：评估候选人回答质量
-- select_next_topic：选择下一个面试话题
-- adjust_difficulty：调整问题难度
 
 ## 简历信息
 {resume_summary}
@@ -45,7 +53,8 @@ _INTERVIEWER_SYSTEM = """你是一位资深技术面试官，正在进行技术�
 {rag_context}
 
 ## 面试进度
-阶段: {phase} | 已提问: {question_count}/{max_questions} | 当前话题: {current_topic}
+阶段: {phase} | 已提问: {question_count}/{max_questions} | 当前话题: {current_topic} | 本话题已问: {topic_round}/{quota}轮
+本话题 JD 要求强度: {topic_importance_label}
 
 输出格式：直接输出面试官的话，不要加前缀。"""
 
@@ -63,41 +72,74 @@ _EVALUATION_SYSTEM = """你是面试评估专家。根据面试对话记录，�
 # ── 节点函数 ──
 
 def plan_interview(state: InterviewState) -> dict:
-    """节点1：规划面试流程（Planning）
+    """节点1：规划面试流程（Planning，JD 驱动）
 
-    分析简历技能，生成面试话题列表和顺序。
-    如果已有计划，则跳过（支持多次调用同一 graph）。
+    主路径：调用 LLM 根据「目标岗位 JD + 简历技能 + 简历摘要」动态生成：
+      - ordered_topics（按 JD 要求强度从高到低排序）
+      - skill_importance（required / preferred / bonus）
+      - suggested_max_questions（按岗位技术密度调整 13-20）
+      - topics_per_skill（每档技能该问几轮）
+    失败自动降级为旧版 TopicPrioritizer 规则排序。
+    如果已有计划，则跳过（幂等）。
     """
     # 已有计划 → 跳过
     if state.get("interview_plan", {}).get("topics"):
         return {}
 
     skills = state.get("skills", [])
+    resume_text = state.get("resume_summary", "")
+    api_key = state.get("api_key", "")
+    base_url = state.get("base_url", "https://api.openai.com/v1")
+    model = state.get("model", "") or "gpt-4o-mini"
+    jd_position_name = state.get("jd_position_name", "") or "通用技术岗"
+    jd_raw_text = state.get("jd_raw_text", "")
+    target_position = state.get("target_position", "")
 
-    # 话题优先级排序
-    topic_priority = {
-        "redis": 1, "java": 2, "spring": 3, "mysql": 4,
-        "分布式": 5, "kafka": 6, "docker": 7,
-        "python": 8, "rag": 9, "llm": 10,
-    }
-
-    sorted_skills = sorted(
-        skills,
-        key=lambda s: topic_priority.get(s.lower(), 99),
+    # ── JD 驱动 LLM 动态排序主路径（失败自动降级） ──
+    jd_result = prioritize_by_jd(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        skills=skills,
+        resume_summary=resume_text,
+        jd_position_name=jd_position_name,
+        jd_raw_text=jd_raw_text,
     )
+    sorted_topics = jd_result.ordered_topics if jd_result.ordered_topics else ["技术基础"]
+    topic_aliases = {canonical: original for original, canonical in jd_result.ordered_aliases}
+    if not topic_aliases and sorted_topics:
+        topic_aliases = {t: t for t in sorted_topics}
+    topic_question_counter = {t: 0 for t in sorted_topics}
+    max_questions = jd_result.suggested_max_questions or 15
+
+    # 计算 phase：如果 required 技能很多 → 直接 deep_dive；否则 basics
+    req_count = sum(1 for v in jd_result.skill_importance.values() if v == "required")
+    phase = "deep_dive" if req_count >= 2 else "basics"
 
     plan = {
-        "topics": sorted_skills if sorted_skills else ["技术基础"],
+        "topics": sorted_topics,
+        "topic_aliases": topic_aliases,
         "current_topic_index": 0,
-        "phase": "intro",
-        "questions_per_topic": 3,
+        "phase": phase,
+        "questions_per_topic": 3,  # 遗留字段兜底
+        # JD 新增字段
+        "skill_importance": dict(jd_result.skill_importance),
+        "topics_per_skill": dict(jd_result.topics_per_skill),
+        "topic_question_counter": topic_question_counter,
+        "position_id": target_position,
+        "position_name": jd_position_name,
+        "priority_source": jd_result.source,
     }
 
-    logger.info("面试计划生成: topics=%s", plan["topics"])
+    logger.info(
+        "面试计划生成(source=%s): position=%s max_q=%d required=%d topics=%s",
+        jd_result.source, jd_position_name, max_questions, req_count, sorted_topics[:10],
+    )
 
     return {
         "interview_plan": plan,
         "current_topic": plan["topics"][0] if plan["topics"] else "技术基础",
+        "max_questions": max_questions,  # 覆盖默认 15
     }
 
 
@@ -124,26 +166,48 @@ def generate_question(state: InterviewState) -> dict:
                     import concurrent.futures
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(
-                            lambda: asyncio.run(retriever.retrieve_by_topic(current_topic))
+                            lambda: asyncio.run(retriever.retrieve(current_topic))
                         )
                         rag_result = future.result()
                 else:
-                    rag_result = loop.run_until_complete(retriever.retrieve_by_topic(current_topic))
-                rag_context = rag_result.format_context() if rag_result.context else ""
+                    rag_result = loop.run_until_complete(retriever.retrieve(current_topic))
+                rag_context = rag_result.format_context() if rag_result.items else ""
             except RuntimeError:
                 rag_context = ""
         except Exception as e:
             logger.warning("RAG 检索失败: %s", e)
             rag_context = ""
 
+    # 计算当前话题要求强度 + 已经问了几轮（供 system prompt 显示，也供路由决策用）
+    importance_map: dict[str, str] = plan.get("skill_importance", {}) or {}
+    importance_label = importance_map.get(current_topic)
+    if importance_label not in {"required", "preferred", "bonus"}:
+        # 模糊匹配
+        importance_label = "preferred"
+        for k, v in importance_map.items():
+            if k and (k in current_topic or current_topic in k) and v in {"required", "preferred", "bonus"}:
+                importance_label = v
+                break
+    topics_per_skill_cfg: dict[str, int] = plan.get("topics_per_skill", {}) or {"required": 4, "preferred": 3, "bonus": 2}
+    quota = int(topics_per_skill_cfg.get(importance_label, 3))
+
+    # topic_question_counter：当前话题问了几轮（本题出完要 +1）
+    counter: dict[str, int] = plan.get("topic_question_counter", {}) or {}
+    topic_round_prev = int(counter.get(current_topic, 0))  # 出这道题之前的轮数
+
     # 构建系统提示词
+    position_name = plan.get("position_name") or state.get("jd_position_name") or "通用技术岗"
     system_content = _INTERVIEWER_SYSTEM.format(
+        position_name=position_name,
         resume_summary=state.get("resume_summary", "无"),
         rag_context=rag_context or "无",
         phase=plan.get("phase", "intro"),
         question_count=question_count,
         max_questions=state.get("max_questions", 15),
         current_topic=current_topic or "未开始",
+        topic_importance_label=importance_label,
+        topic_round=topic_round_prev,
+        quota=quota,
     )
 
     # 替换或添加系统消息
@@ -152,8 +216,8 @@ def generate_question(state: InterviewState) -> dict:
     else:
         messages.insert(0, SystemMessage(content=system_content))
 
-    # 调用 LLM（失败时降级返回，避免 graph 崩溃导致 500）
-    llm = _get_llm(state)
+    # 调用 LLM（temperature=0.1 减少 token/延迟，问题不需要 creative；失败直接降级提示用户检查配置）
+    llm = _get_llm(state, temperature=0.1)
     try:
         response = llm.invoke(messages)
         ai_content = response.content
@@ -173,17 +237,29 @@ def generate_question(state: InterviewState) -> dict:
     elif new_count >= 3:
         new_phase = "deep_dive"
 
+    # 累加当前话题已问轮数
+    new_counter = dict(counter)
+    if current_topic:
+        new_counter[current_topic] = topic_round_prev + 1
+
     return {
         "messages": messages,
         "question_count": new_count,
-        "interview_plan": {**plan, "phase": new_phase},
+        "rag_context": rag_context,
+        "interview_plan": {
+            **plan,
+            "phase": new_phase,
+            "topic_question_counter": new_counter,
+        },
     }
 
 
 def evaluate_response(state: InterviewState) -> dict:
-    """节点3：评估候选人回答（Memory 更新）
+    """节点3：评估候选人回答（LLM 实时深度分析 + Memory 更新）
 
-    更新候选人画像中的技能得分和强弱项。
+    通过 LLM 从四个维度评估回答深度：技术准确性、回答深度、逻辑完整性、工程实践。
+    任何失败（LLM 不可用 / JSON 解析失败）直接抛出带上下文的 RuntimeError，
+    不再做规则兜底或默认 medium 分数（API Key 错了没必要强行继续）。
     """
     messages = state.get("messages", [])
     profile = dict(state.get("candidate_profile", {}))
@@ -206,70 +282,149 @@ def evaluate_response(state: InterviewState) -> dict:
         answered.append(current_topic)
     profile["answered_topics"] = answered
 
-    # 简单评分
-    response_len = len(recent_human)
-    tech_keywords = ["原理", "实现", "因为", "导致", "优化", "设计", "架构"]
-    keyword_count = sum(1 for kw in tech_keywords if kw in recent_human)
+    # ── LLM 深度评估 ──
+    eval_data = _llm_evaluate_answer(recent_human, current_topic, state)
 
-    base_score = min(40, response_len // 10) + keyword_count * 10
+    # 更新技能得分（使用四维度总分映射到 0-100）
+    total_score = eval_data["total_score"]
     skill_scores = dict(profile.get("skill_scores", {}))
-    skill_scores[current_topic] = min(100, base_score)
+    # 同名话题多次回答取历史最高分 + 本次加权（避免一次高分冲掉多次平庸）
+    prev = skill_scores.get(current_topic, 0)
+    skill_scores[current_topic] = max(prev, int(prev * 0.4 + total_score * 0.6)) if prev else total_score
     profile["skill_scores"] = skill_scores
 
-    # 更新强弱项
-    if base_score >= 60:
-        strengths = list(profile.get("strengths", []))
-        if current_topic not in strengths:
-            strengths.append(current_topic)
-        profile["strengths"] = strengths
-    elif base_score < 30:
-        weaknesses = list(profile.get("weaknesses", []))
-        if current_topic not in weaknesses:
-            weaknesses.append(current_topic)
-        profile["weaknesses"] = weaknesses
-
-    quality = "high" if base_score >= 60 else "medium" if base_score >= 30 else "low"
+    # 更新强弱项：按 level 判断，同时记录评估里的具体优/缺点
+    strengths = list(profile.get("strengths", []))
+    weaknesses = list(profile.get("weaknesses", []))
+    if eval_data["level"] == "high" and current_topic not in strengths:
+        strengths.append(current_topic)
+    elif eval_data["level"] == "low" and current_topic not in weaknesses:
+        weaknesses.append(current_topic)
+    # 把 LLM 指出的具体缺点作为待补强知识点挂到 profile 上（非结构化字段存 notes）
+    if eval_data["weaknesses"]:
+        notes = profile.get("improvement_notes", [])
+        for w in eval_data["weaknesses"] + eval_data["suggestions"]:
+            note = f"[{current_topic}] {w}"
+            if note not in notes:
+                notes.append(note)
+        profile["improvement_notes"] = notes[-30:]  # 最多保留 30 条
+    profile["strengths"] = strengths
+    profile["weaknesses"] = weaknesses
 
     return {
         "candidate_profile": profile,
-        "response_quality": quality,
+        "response_quality": eval_data["level"],
     }
 
 
-def decide_next(state: InterviewState) -> str:
-    """节点4：条件路由 - 决定下一步动作
+def _llm_evaluate_answer(answer: str, topic: str, state: InterviewState) -> dict:
+    """调用 LLM 做四维度回答质量评估，任何失败直接抛 RuntimeError"""
+    # 注意：任何回答长度都直接进 LLM（包括"不知道"/<20字符），不再走规则 low 兜底；
+    # LLM 不可用时直接报错（API Key 错误没必要强行继续）。
 
-    返回值决定走哪条边：
-    - "followup"：追问当前话题
-    - "next_topic"：切换到下一个话题
-    - "end"：结束面试，生成评估
+    # 模型/API 配置：优先用户 state 里传入的，其次全局 settings，最后兜底
+    from ai_interviewer.config import get_settings
+    settings = get_settings()
+    user_model = state.get("model") or settings.openai_model or "gpt-4o-mini"
+    try:
+        llm = ChatOpenAI(
+            api_key=state.get("api_key") or settings.openai_api_key,
+            base_url=state.get("base_url") or settings.openai_base_url,
+            model=user_model,
+            temperature=0.1,
+            max_tokens=900,
+        )
+        prompt = f"""## 当前面试话题
+{topic}
+
+## 候选人回答
+{answer}
+
+按评估维度严格评分，输出 JSON。"""
+        result = llm.invoke([
+            SystemMessage(content=_QUALITY_EVAL_SYSTEM),
+            HumanMessage(content=prompt),
+        ])
+        eval_data = _parse_quality_json(result.content)
+        logger.info(
+            "LLM 回答评估: topic=%s score=%d level=%s dim=%s",
+            topic, eval_data["total_score"], eval_data["level"], eval_data["dimensions"],
+        )
+        return eval_data
+    except (RuntimeError, ValueError):
+        # JSON 解析错误已包装为 ValueError / 上层已有 RuntimeError，直接透传
+        raise
+    except Exception as e:
+        err_type = type(e).__name__
+        effective_api_key = state.get("api_key") or settings.openai_api_key
+        effective_base_url = state.get("base_url") or settings.openai_base_url
+        if not effective_api_key:
+            masked_key = "(空)"
+        elif len(effective_api_key) <= 8:
+            masked_key = "***" + (effective_api_key[-4:] if len(effective_api_key) > 4 else "")
+        else:
+            masked_key = effective_api_key[:8] + "..." + effective_api_key[-4:]
+        msg = (
+            f"候选人回答评估失败，面试无法继续：[{err_type}] {str(e) or '(无错误消息)'}。"
+            f" | topic={topic} | model={user_model} | base_url={effective_base_url}"
+            f" | api_key={masked_key}"
+        )
+        logger.error(msg)
+        raise RuntimeError(msg) from e
+
+
+def decide_next(state: InterviewState) -> str:
+    """节点4：条件路由 - 决定下一步动作（JD 二维决策表）
+
+    不再是简单三句 if-else，而是「JD 要求强度 × 回答质量」二维矩阵决策：
+    - required（必备技能）答崩 → 必须追问；高分才切
+    - preferred（偏好技能）答崩 → 追问几次；中等以上直接切
+    - bonus（加分技能）答崩也无所谓 → 直接切
+    同时叠加：题数到顶结束、配额满了强制切、剩题不够覆盖时压缩追问。
+
+    返回值与原兼容："followup" / "next_topic" / "end"
     """
     question_count = state.get("question_count", 0)
     max_questions = state.get("max_questions", 15)
-
-    if question_count >= max_questions:
-        return "end"
-
-    quality = state.get("response_quality", "medium")
     plan = state.get("interview_plan", {})
-    phase = plan.get("phase", "basics")
-
-    # 回答质量低 + 还在深度阶段 → 追问
-    if quality == "low" and phase == "deep_dive":
-        return "followup"
-
-    # 回答质量高 + 有更多话题 → 换题
     topics = plan.get("topics", [])
     current_idx = plan.get("current_topic_index", 0)
-    if current_idx < len(topics) - 1:
-        return "next_topic"
+    current_topic = state.get("current_topic", "")
 
-    # 默认追问
-    return "followup"
+    # 当前话题要求强度（required / preferred / bonus）
+    importance_map: dict[str, str] = plan.get("skill_importance", {}) or {}
+    importance = importance_map.get(current_topic, "preferred")
+    if importance not in {"required", "preferred", "bonus"}:
+        for k, v in importance_map.items():
+            if k and (k in current_topic or current_topic in k) and v in {"required", "preferred", "bonus"}:
+                importance = v
+                break
+        else:
+            importance = "preferred"
+
+    # 当前话题问了几轮（用于配额保护）
+    counter: dict[str, int] = plan.get("topic_question_counter", {}) or {}
+    questions_on_this_topic = int(counter.get(current_topic, 0))
+
+    quality = state.get("response_quality", "medium")
+    # followup 标记：上一轮路由决定要追问，这轮 quality 还没更新时兜底
+    if quality == "followup":
+        quality = "low"
+
+    return make_route_decision(
+        quality=quality,
+        importance=importance,
+        questions_on_this_topic=questions_on_this_topic,
+        questions_per_skill=plan.get("topics_per_skill", {"required": 4, "preferred": 3, "bonus": 2}),
+        question_count=question_count,
+        max_questions=max_questions,
+        current_topic_index=current_idx,
+        total_topics=len(topics),
+    )
 
 
 def next_topic(state: InterviewState) -> dict:
-    """节点5a：切换到下一个面试话题"""
+    """节点5a：切换到下一个面试话题（同时清 RAG 上下文，避免混用上一个话题的知识库）"""
     plan = dict(state.get("interview_plan", {}))
     topics = plan.get("topics", [])
     current_idx = plan.get("current_topic_index", 0)
@@ -280,6 +435,7 @@ def next_topic(state: InterviewState) -> dict:
     return {
         "interview_plan": {**plan, "current_topic_index": new_idx},
         "current_topic": new_topic,
+        "rag_context": "",  # 切题 = 清空 RAG 上下文缓存，生成问题时重新检索新话题的资料
     }
 
 

@@ -131,8 +131,18 @@ class InterviewGraphAgent:
         resume_summary: str,
         candidate_name: str = "",
         skills: list[str] | None = None,
+        *,
+        target_position: str = "",
+        jd_position_name: str = "",
+        jd_raw_text: str = "",
     ) -> dict:
-        """创建面试会话，初始化 Agent 状态"""
+        """创建面试会话，初始化 Agent 状态
+
+        JD 相关字段为可选：
+        - target_position: 岗位 ID（比如 agent_dev_engineer），前端选择后端后直接传入
+        - jd_position_name: 岗位中文名（比如「Agent 开发工程师」）
+        - jd_raw_text: 岗位 JD 原文（要求+加分项原文，plan_interview 里传给 LLM 做动态优先级）
+        """
         self._sessions[session_id] = {
             "messages": [],
             "resume_summary": resume_summary,
@@ -158,6 +168,10 @@ class InterviewGraphAgent:
             "api_key": self._api_key,
             "base_url": self._base_url,
             "model": self._model,
+            # JD 字段（plan_interview 节点读取后决定 topic 优先级和配额）
+            "target_position": target_position,
+            "jd_position_name": jd_position_name,
+            "jd_raw_text": jd_raw_text,
         }
         return self._sessions[session_id]
 

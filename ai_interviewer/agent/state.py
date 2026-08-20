@@ -31,12 +31,20 @@ class CandidateProfile(TypedDict, total=False):
 class InterviewPlan(TypedDict, total=False):
     """面试计划 - Planning
 
-    面试开始时生成，根据简历技能动态规划面试话题和顺序。
+    面试开始时生成，根据简历技能 + 目标岗位 JD 动态规划面试话题和顺序。
     """
-    topics: list[str]                     # 面试话题列表（按优先级排序）
-    current_topic_index: int              # 当前话题索引
-    phase: str                            # "intro" | "basics" | "deep_dive" | "wrap_up" | "evaluation"
-    questions_per_topic: int              # 每个话题的最大问题数
+    topics: list[str]                                       # 面试话题列表（按优先级排序，标准名）
+    topic_aliases: dict[str, str]                           # 标准名 → 简历原始名
+    current_topic_index: int                                # 当前话题索引
+    phase: str                                              # "intro" | "basics" | "deep_dive" | "wrap_up" | "evaluation"
+    questions_per_topic: int                                # 遗留字段（老调用方兜底）；实际用 topics_per_skill
+    # ↓ JD 驱动新增字段
+    skill_importance: dict[str, str]                        # {标准话题: "required" | "preferred" | "bonus"}
+    topics_per_skill: dict[str, int]                        # {"required":4, "preferred":3, "bonus":2}
+    topic_question_counter: dict[str, int]                  # {标准话题: 已经问了几轮}；next_topic 时重置为 0
+    position_id: str                                        # 目标岗位 ID（ai_fullstack / agent_engineer / ...）
+    position_name: str                                      # 目标岗位中文名
+    priority_source: str                                    # "llm" / "fallback"（规划来源，排查用）
 
 
 class InterviewState(TypedDict):
@@ -58,9 +66,14 @@ class InterviewState(TypedDict):
     candidate_name: str
     skills: list[str]                       # 候选人技能列表
 
+    # ── 目标岗位（JD 驱动新增） ──
+    target_position: str                    # 前端选的 position_id 或岗位名
+    jd_position_name: str                   # 岗位中文名称
+    jd_raw_text: str                        # JD 完整原文（给 LLM 排序/出题时参考）
+
     # ── 面试进度 ──
     question_count: int                    # 已提问数
-    max_questions: int                      # 最大问题数
+    max_questions: int                      # 最大问题数（根据岗位密度动态调整）
     current_topic: str                     # 当前面试话题
     is_finished: bool                      # 面试是否结束
 

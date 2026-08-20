@@ -223,26 +223,6 @@
             border-radius: var(--radius-full);
         }
 
-        .api-presets {
-            display: flex;
-            gap: var(--space-md);
-            flex-wrap: wrap;
-            margin-bottom: var(--space-xl);
-        }
-
-        .api-presets .el-button {
-            margin: 0;
-            padding: var(--space-sm) var(--space-xl);
-            border-radius: var(--radius-lg);
-            font-weight: var(--font-weight-medium);
-            transition: all 0.2s ease;
-        }
-
-        .api-presets .el-button:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-
         .skill-tag {
             margin: var(--space-xs) var(--space-sm) var(--space-xs) 0;
         }
@@ -821,6 +801,17 @@
             gap: var(--space-sm);
             margin-top: var(--space-md);
         }
+
+        /* 面试官状态：读简历阶段小头像上下蹦跶 */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50%      { transform: translateY(-6px); }
+        }
+        /* 三个点点闪烁指示器 */
+        @keyframes blink {
+            0%, 100% { opacity: 1;    }
+            50%      { opacity: 0.15; }
+        }
     </style>
 </head>
 <body>
@@ -866,13 +857,7 @@
             <!-- 步骤 1: 模型设置 -->
             <div class="card" v-if="step === 1">
                 <div class="step-title">1. 模型设置</div>
-                <p style="color: var(--color-text-secondary); margin-bottom: var(--space-xl); font-size: var(--font-size-base);">选择模型预设或手动填写 API 信息。信息仅在当前浏览器中保存，不会上传。</p>
-                <div class="api-presets">
-                    <el-button type="primary" plain @click="setPreset('openai')">OpenAI</el-button>
-                    <el-button type="primary" plain @click="setPreset('deepseek')">DeepSeek</el-button>
-                    <el-button type="primary" plain @click="setPreset('qwen')">通义千问</el-button>
-                    <el-button type="primary" plain @click="setPreset('glm')">智谱 GLM</el-button>
-                </div>
+                <p style="color: var(--color-text-secondary); margin-bottom: var(--space-xl); font-size: var(--font-size-base);">请手动填写 API 信息。信息仅在当前浏览器中保存，不会上传。</p>
                 <el-form label-position="top">
                     <el-form-item label="API Key">
                         <el-input v-model="form.apiKey" placeholder="sk-..." type="password" show-password></el-input>
@@ -894,9 +879,6 @@
             <div class="card" v-if="step === 2">
                 <div class="step-title">2. 上传简历</div>
                 <el-tabs v-model="resumeTab">
-                    <el-tab-pane label="粘贴文本" name="text">
-                        <el-input v-model="resumeText" type="textarea" :rows="6" placeholder="粘贴简历内容，可以是一段项目经历或完整简历..."></el-input>
-                    </el-tab-pane>
                     <el-tab-pane label="上传 PDF" name="pdf">
                         <el-upload drag accept=".pdf" :auto-upload="false" :on-change="handlePdfUpload">
                             <el-icon class="el-icon--upload" size="32"><upload-filled /></el-icon>
@@ -904,10 +886,59 @@
                             <div style="color: var(--color-text-muted); font-size: var(--font-size-sm); margin-top: var(--space-sm);">支持 .pdf 格式文件</div>
                         </el-upload>
                     </el-tab-pane>
+                    <el-tab-pane label="粘贴文本" name="text">
+                        <el-input v-model="resumeText" type="textarea" :rows="6" placeholder="粘贴简历内容，可以是一段项目经历或完整简历..."></el-input>
+                    </el-tab-pane>
                 </el-tabs>
                 <div class="step-actions">
-                    <el-button type="primary" @click="parseResume" :loading="loading">解析简历</el-button>
+                    <el-button type="primary" @click="parseResume" :loading="loading">{{ resumeTab === 'text' ? '解析简历' : '重新解析简历' }}</el-button>
                     <el-button @click="step = 1">上一步</el-button>
+                </div>
+
+                <!-- 选择应聘岗位（永远显示，防止整块消失导致用户看不到） -->
+                <div class="report-card" style="margin-top: var(--space-lg);">
+                    <div class="report-card-title">💼 选择应聘岗位</div>
+                    <el-form label-position="top" style="margin-top: var(--space-sm);">
+                        <!-- 「当前已选」显性显示块：永远渲染，不依赖 el-select 内部行为 -->
+                        <div v-if="currentPositionName() && !positionsError && !positionsLoading" style="margin-bottom: var(--space-md); display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap;">
+                            <span style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">当前目标岗位：</span>
+                            <el-tag type="primary" effect="light" size="large" style="font-size: var(--font-size-base); padding: 4px 14px;">{{ currentPositionName() }}</el-tag>
+                            <el-tag v-if="currentPositionMeta() && currentPositionMeta().maxQ" type="success" effect="plain" size="default">约 {{ currentPositionMeta().maxQ }} 题</el-tag>
+                            <el-tag v-if="currentPositionMeta() && currentPositionMeta().req" type="warning" effect="plain" size="default">{{ currentPositionMeta().req }} 项硬性要求</el-tag>
+                            <span style="color: var(--color-text-muted); font-size: var(--font-size-sm);">（点击下方下拉可切换）</span>
+                        </div>
+                        <el-form-item label="请选择目标岗位（决定提问优先级和题数上限）">
+                            <!-- 错误态：红色提示 + 重试按钮 -->
+                            <div v-if="positionsError && !positionsLoading" style="display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap;">
+                                <el-result icon="error" :title="'加载失败'" :sub-title="positionsError" style="flex: 1; padding: 0; margin: 0;">
+                                    <template #extra>
+                                        <el-button type="primary" @click="retryLoadPositions">点击重试</el-button>
+                                    </template>
+                                </el-result>
+                            </div>
+                            <!-- 成功态（含 loading / 空数组）：永远显示下拉框，错误时也显示一个禁用的 -->
+                            <div v-else>
+                                <el-select
+                                    v-model="targetPosition"
+                                    placeholder="请选择岗位"
+                                    style="width: 100%;"
+                                    :loading="positionsLoading"
+                                    :disabled="positionsLoading || !positions.length"
+                                    :teleported="false"
+                                >
+                                    <el-option
+                                        v-for="p in positions"
+                                        :key="p.id || p.name"
+                                        :label="`${p.name} · ${p.location || '深圳'} · ${p.requirements_count || 0} 项硬性要求 · ${p.suggested_max_questions || (p.id === 'ai_fullstack_engineer' || p.id === 'agent_dev_engineer' ? 18 : 14)} 题`"
+                                        :value="p.id || p.name"
+                                    />
+                                </el-select>
+                                <div v-if="!positionsLoading && !positions.length" style="color: var(--color-text-muted); font-size: var(--font-size-sm); margin-top: var(--space-xs);">
+                                    暂无可选岗位，请确认后端是否已启动，或 <el-button type="primary" link size="small" @click="retryLoadPositions">点击重试</el-button>
+                                </div>
+                            </div>
+                        </el-form-item>
+                    </el-form>
                 </div>
 
                 <!-- 解析结果 -->
@@ -941,14 +972,14 @@
                         <div style="color: var(--color-text-secondary); line-height: 1.5; font-size: var(--font-size-sm);">{{ resume.summary }}</div>
                     </div>
                     <div class="action-bar">
-                        <el-button type="success" @click="startInterview" :loading="loading" size="large">开始面试</el-button>
+                        <el-button type="success" @click="startInterview" :loading="loading" size="large">开始面试{{ currentPositionName() ? ' · ' + currentPositionName() : '' }}</el-button>
                     </div>
                 </div>
             </div>
 
             <!-- 步骤 3: 面试对话 -->
             <div class="card interview-step" v-if="step === 3">
-                <div class="step-title">3. 模拟面试</div>
+                <div class="step-title">3. 模拟面试<span v-if="currentPositionName()" style="float: right; font-size: var(--font-size-sm); font-weight: 500; color: var(--color-primary);">应聘岗位：{{ currentPositionName() }}</span></div>
                 <div class="chat-container" ref="chatContainer">
                     <div v-for="(msg, index) in chatMessages" :key="index" class="message">
                         <div v-if="msg.role === 'interviewer'" class="message-avatar interviewer">👨‍💼</div>
@@ -957,7 +988,18 @@
                             {{ msg.content }}
                         </div>
                     </div>
-                    <div v-if="streaming" class="message">
+                    <div v-if="interviewerStatus === 'reading_resume'" class="message">
+                        <div class="message-avatar interviewer" style="animation: bounce 1.2s ease-in-out infinite;">📖</div>
+                        <div class="message-body interviewer" style="color: var(--color-text-muted);">
+                            面试官正在认真阅读你的简历，稍后开始提问…
+                            <span style="display:inline-block; min-width: 42px;">
+                                <span style="animation: blink 1.2s 0s infinite;">●</span>
+                                <span style="animation: blink 1.2s 0.4s infinite; opacity:.5;">●</span>
+                                <span style="animation: blink 1.2s 0.8s infinite; opacity:.3;">●</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div v-if="interviewerStatus === 'typing'" class="message">
                         <div class="message-avatar interviewer">👨‍💼</div>
                         <div class="message-body interviewer" style="color: var(--color-text-muted);">面试官正在输入...</div>
                     </div>
@@ -1011,7 +1053,11 @@
                 return {
                     step: 1,
                     loading: false,
-                    resumeTab: 'text',
+                    positionsLoading: false,
+                    positionsError: '',
+                    positions: [],
+                    targetPosition: '',
+                    resumeTab: 'pdf',
                     resumeText: '',
                     pdfData: '',
                     resumeParsed: false,
@@ -1019,6 +1065,8 @@
                     chatMessages: [],
                     userAnswer: '',
                     streaming: false,
+                    // 面试官状态：idle=空闲不显示 / reading_resume=📖 看简历+排提问顺序 / typing=✍️ 正在输入问题
+                    interviewerStatus: 'idle',
                     finished: false,
                     evaluation: null,
                     form: {
@@ -1028,16 +1076,64 @@
                     }
                 };
             },
+            async mounted() {
+                await this.loadPositions();
+            },
             methods: {
-                setPreset(name) {
-                    const presets = {
-                        openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },
-                        deepseek: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-                        qwen: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
-                        glm: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4' }
+                async loadPositions() {
+                    this.positionsLoading = true;
+                    this.positionsError = '';
+                    try {
+                        const res = await fetch('/api/positions');
+                        if (!res.ok) {
+                            throw new Error('HTTP ' + res.status);
+                        }
+                        const data = await res.json();
+                        this.positions = Array.isArray(data) ? data : (Array.isArray(data.positions) ? data.positions : []);
+                        if (!this.positions.length) {
+                            const msg = '后端返回空岗位列表';
+                            this.positionsError = msg;
+                            ElMessage.warning(msg);
+                        } else {
+                            // el-select 在异步 options 加载后容易显示空值，这里用 nextTick 强制同步，
+                            // 先清空再赋第一个值，确保已选值显示出来
+                            this.$nextTick(() => {
+                                const firstId = this.positions[0].id || this.positions[0].name || '';
+                                // 如果当前 targetPosition 没在 positions 里（或为空）就重置第一个
+                                const stillValid = this.targetPosition && this.positions.some(p => (p.id || p.name) === this.targetPosition);
+                                if (!stillValid) {
+                                    this.targetPosition = firstId;
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        const msg = '加载岗位列表失败：' + (e.message || String(e));
+                        this.positionsError = msg;
+                        this.positions = [];
+                        ElMessage.error(msg);
+                    } finally {
+                        this.positionsLoading = false;
+                    }
+                },
+                async retryLoadPositions() {
+                    await this.loadPositions();
+                },
+                currentPositionName() {
+                    if (!this.targetPosition) return '';
+                    const found = this.positions.find(p => p.id === this.targetPosition || p.name === this.targetPosition);
+                    return found ? found.name : this.targetPosition;
+                },
+                currentPositionMeta() {
+                    if (!this.targetPosition || !this.positions.length) return null;
+                    const found = this.positions.find(p => p.id === this.targetPosition || p.name === this.targetPosition);
+                    if (!found) return null;
+                    const maxQ = found.suggested_max_questions || (found.id === 'ai_fullstack_engineer' || found.id === 'agent_dev_engineer' ? 18 : 14);
+                    return {
+                        req: found.requirements_count || 0,
+                        bonus: found.bonus_count || 0,
+                        maxQ,
+                        location: found.location || '深圳',
                     };
-                    this.form.baseUrl = presets[name].baseUrl;
-                    this.form.model = presets[name].model;
                 },
                 saveConfig() {
                     localStorage.setItem('ai_api_key', this.form.apiKey);
@@ -1065,12 +1161,18 @@
                         const dataUrl = e.target.result;
                         this.pdfData = dataUrl.split(',')[1];
                         this.resumeText = '';
-                        this.resumeTab = 'text';
-                        ElMessage.success('PDF 文件已上传，请点击「解析简历」');
+                        ElMessage.success('PDF 已读取，自动开始解析简历…');
+                        // PDF 上传完成后自动触发解析，不用用户再手动点一次按钮
+                        // 按钮保留在下方仅用于"解析失败后手动重试"场景
+                        this.$nextTick(() => { this.parseResume(); });
                     };
                     reader.readAsDataURL(file.raw);
                 },
                 async parseResume() {
+                    if (this.loading) {
+                        // 防重复触发（PDF 上传后自动调用时若用户正好又点了按钮就跳过）
+                        return;
+                    }
                     this.saveConfig();
                     if (!this.resumeText.trim() && !this.pdfData) {
                         ElMessage.warning('请先输入简历内容或上传 PDF 文件');
@@ -1108,6 +1210,10 @@
                 },
                 async startInterview() {
                     this.saveConfig();
+                    if (this.positions.length && !this.targetPosition) {
+                        ElMessage.warning('请先选择应聘岗位');
+                        return;
+                    }
                     this.loading = true;
                     try {
                         const res = await fetch('/api/start-interview', {
@@ -1121,7 +1227,8 @@
                                 resume_summary: this.resume.summary,
                                 candidate_name: this.resume.name,
                                 skills: this.resume.skills,
-                                session_id: 'session_1'
+                                session_id: 'session_1',
+                                target_position: this.targetPosition || undefined,
                             })
                         });
                         const data = await res.json();
@@ -1131,30 +1238,83 @@
                             this.userAnswer = '';
                             this.finished = false;
                             this.evaluation = null;
+
+                            // ① 先显示「📖 面试官正在读简历」= 后台跑 prioritize_by_jd 排计划
+                            this.interviewerStatus = 'reading_resume';
+
+                            // ② 轮询 /api/plan-status，每 300ms 问一次后台读完没（最多等 60s）
+                            let waitedMs = 0;
+                            let planReady = false;
+                            const POLL_MS = 300;
+                            while (waitedMs < 60000) {
+                                const r = await fetch('/api/plan-status?session_id=session_1');
+                                if (r.ok) {
+                                    const ps = await r.json();
+                                    if (ps.error) {
+                                        // 后台线程真实错误（API Key 错 / LLM 连不上 / JSON 解析失败）
+                                        ElMessage.error(ps.error);
+                                        // 退回到 step 2，方便用户改配置后重试
+                                        this.step = 2;
+                                        this.interviewerStatus = 'idle';
+                                        this.loading = false;
+                                        return;
+                                    }
+                                    if (ps.ready) {
+                                        planReady = true;
+                                        break;
+                                    }
+                                }
+                                await new Promise(resolve => setTimeout(resolve, POLL_MS));
+                                waitedMs += POLL_MS;
+                            }
+                            if (!planReady) {
+                                ElMessage.error('面试官准备超时，请检查 API/模型配置后重试');
+                                this.step = 2;
+                                this.interviewerStatus = 'idle';
+                                this.loading = false;
+                                return;
+                            }
+                            // ③ 计划排好 → 切到「面试官正在输入」开始出第一题
+                            this.interviewerStatus = 'typing';
                             await this.getFirstQuestion();
+                        } else if (!res.ok) {
+                            ElMessage.error(data.detail || '开始面试失败');
+                            this.step = 2;
+                            this.interviewerStatus = 'idle';
                         } else {
                             ElMessage.error(data.detail || '开始面试失败');
                         }
                     } catch (e) {
                         ElMessage.error('开始面试失败：' + e.message);
+                        this.interviewerStatus = 'idle';
                     }
                     this.loading = false;
                 },
                 async getFirstQuestion() {
                     this.streaming = true;
+                    // 如果前面 startInterview 已经把 interviewerStatus 切到 typing 了就保留；兜底设置一次
+                    if (this.interviewerStatus !== 'reading_resume') {
+                        this.interviewerStatus = 'typing';
+                    }
                     try {
                         const res = await fetch('/api/first-question', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ session_id: 'session_1' })
                         });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.detail || `请求失败: ${res.status}`);
+                        }
                         const data = await res.json();
                         this.chatMessages.push({ role: 'interviewer', content: data.response });
                         this.$nextTick(() => this.scrollToBottom());
                     } catch (e) {
                         ElMessage.error('获取问题失败：' + e.message);
+                    } finally {
+                        this.streaming = false;
+                        this.interviewerStatus = 'idle';
                     }
-                    this.streaming = false;
                 },
                 async sendAnswer() {
                     if (!this.userAnswer.trim()) return;
@@ -1162,6 +1322,7 @@
                     const answer = this.userAnswer;
                     this.userAnswer = '';
                     this.streaming = true;
+                    this.interviewerStatus = 'typing';
                     this.$nextTick(() => this.scrollToBottom());
 
                     try {
@@ -1170,6 +1331,10 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ session_id: 'session_1', answer: answer })
                         });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            throw new Error(err.detail || `请求失败: ${res.status}`);
+                        }
                         const data = await res.json();
                         this.chatMessages.push({ role: 'interviewer', content: data.response });
                         this.finished = data.finished;
@@ -1178,12 +1343,15 @@
                         }
                     } catch (e) {
                         ElMessage.error('发送失败：' + e.message);
+                    } finally {
+                        this.streaming = false;
+                        this.interviewerStatus = 'idle';
                     }
-                    this.streaming = false;
                     this.$nextTick(() => this.scrollToBottom());
                 },
                 async finishInterview() {
                     this.finished = true;
+                    this.interviewerStatus = 'idle';
                     this.step = 4;
                     try {
                         const res = await fetch('/api/evaluation?session_id=session_1');
@@ -1209,6 +1377,8 @@
                     this.userAnswer = '';
                     this.finished = false;
                     this.evaluation = null;
+                    this.streaming = false;
+                    this.interviewerStatus = 'idle';
                 }
             }
         }).use(ElementPlus).mount('#app');

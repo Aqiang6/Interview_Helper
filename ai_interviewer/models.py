@@ -64,26 +64,6 @@ class WarmupResponse(BaseModel):
 
 
 # ═══════════════════════════════════════════
-#  摘要压缩相关模型
-# ═══════════════════════════════════════════
-
-class ConversationMessage(BaseModel):
-    """对话消息"""
-    role: str = Field(description="角色：user / assistant / system")
-    content: str = Field(description="消息内容")
-    timestamp: float = Field(default_factory=time.time)
-
-
-class SummaryResult(BaseModel):
-    """摘要压缩结果"""
-    summary: str = Field(description="压缩后的摘要文本")
-    original_tokens: int = Field(description="原始 Token 数")
-    compressed_tokens: int = Field(description="压缩后 Token 数")
-    compression_ratio: float = Field(description="压缩比率")
-    entities_preserved: list[str] = Field(default_factory=list, description="保留的关键实体")
-
-
-# ═══════════════════════════════════════════
 #  API 管理相关模型
 # ═══════════════════════════════════════════
 
